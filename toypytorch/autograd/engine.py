@@ -2,9 +2,25 @@ import collections
 import functools
 from typing import List, Tuple
 
+import numpy as np
+
 from . import function
 from .utils import subvals
-from .tensor import Tensor, AutogradMeta
+# from .tensor import Tensor, AutogradMeta
+
+
+Tensor = None
+AutogradMeta = None
+
+
+def set_tensor_type(cls):
+    global Tensor
+    Tensor = cls
+
+
+def set_grad_meta(cls):
+    global AutogradMeta
+    AutogradMeta = cls
 
 
 def primitive(f_raw):
@@ -30,14 +46,17 @@ def primitive(f_raw):
                 grad_fn = getattr(function, function.get_func_class_name(f_raw))()
                 grad_fn.add_next_edge_list(collect_next_edges_list(tensor_args_list))
                 grad_fn.set_tensor_args([tensor for _, tensor in tensor_args_list])
+                grad_fn.set_args(argvals)
 
                 grad_meta = AutogradMeta()
                 grad_meta.set_function(grad_fn)
+                grad_meta.grad = np.zeros_like(ans)
 
                 result_tensor.set_autograd_meta(grad_meta)
 
             return result_tensor
         else:
+            print("raw", f_raw(*args, **kwargs))
             return Tensor(f_raw(*args, **kwargs))
     return f_wrapped
 
@@ -77,8 +96,20 @@ def notrace_primitive(f_raw):
 
 
 def find_tensor_args(args):
+    """
     return [(argnum, arg) for argnum, arg
             in enumerate(args) if isinstance(arg, Tensor) and arg.is_variable()]
+    """
+    output = []
+    argnum = 0
+    for arg in args:
+        print(arg)
+        if isinstance(arg, Tensor) and arg.is_variable():
+            output.append((argnum, arg))
+        argnum += 1
+
+    print("output")
+    return output
 
 
 def is_func_output_variable(args_list: List[Tuple[int, Tensor]]):
@@ -93,4 +124,20 @@ def collect_next_edges_list(var_list: List[Tuple[int, Tensor]]):
             edge_list.append(function.Edge(argnum, var.get_grad_fn()))
 
     return edge_list
+
+
+def get_item(A, idx):
+    sub_tensor = Tensor(A.get_value()[idx])
+    if A.is_variable():
+        sub_tensor.set_to_variable()
+
+        grad_fn = function.SelectFunction()
+        grad_fn.set_args(idx)
+        grad_fn.add_next_edge(function.Edge(0, A.get_grad_function()))
+
+        grad_meta = AutogradMeta()
+        grad_meta.set_function(grad_fn)
+        grad_meta.grad = np.zeros_like(sub_tensor.get_value())
+
+    return sub_tensor
 

@@ -2,11 +2,10 @@ from typing import List, Tuple, Dict
 import numpy as anp
 
 from .utils import upper_first_letter
-from .tensor import Tensor
 
 
 def get_func_class_name(func):
-    return "{func}Function".format({"func": upper_first_letter(func.__name__)})
+    return "{}Function".format(upper_first_letter(func.__name__))
 
 
 def unbroadcast(target, g, broadcast_idx=0):
@@ -36,7 +35,7 @@ class Function(object):
 
     def __init__(self):
         self._edge_list: List[Edge] = []
-        self.tensor_dict: Dict[int, Tensor] = {}
+        self.tensor_dict = {}
         self.arg_vals = []
 
     def add_next_edge(self, next_edge):
@@ -46,7 +45,7 @@ class Function(object):
         for edge in next_edge_list:
             self.add_next_edge(edge)
 
-    def set_tensor_args(self, tensor_args: List[Tensor]):
+    def set_tensor_args(self, tensor_args):
         for argnum, tensor in enumerate(tensor_args):
             self.tensor_dict[argnum] = tensor
 
@@ -58,7 +57,10 @@ class Function(object):
 
     def get_grad_in_input_nr(self, input_nr: int, grad, value):
         vjp = self.VJP_ALL[input_nr]
-        return vjp(grad, value, *self.arg_vals)
+        if isinstance(self, SelectFunction):
+            return vjp(self, grad, value, *self.arg_vals)
+        else:
+            return vjp(grad, value, *self.arg_vals)
 
     def get_all_next_fn_and_tensor(self):
         return [
@@ -176,6 +178,21 @@ class ReshapeFunction(Function):
         lambda g, ans, x, shape, order=None:
             anp.reshape(g, anp.shape(x), order=order)
     ]
+
+
+# ----- select grads -----
+def vjp_select(self: Function, g, ans, idx_args):
+    out_grad = anp.zeros_like(self.tensor_dict[0])
+    out_grad[idx_args] = g
+
+    return out_grad
+
+
+class SelectFunction(Function):
+    VJP_ALL = [
+        vjp_select
+    ]
+
 
 # ----- Dot grads -----
 

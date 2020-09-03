@@ -1,5 +1,8 @@
-from .function import Function
-from .numpy import wrapper as anp
+import numpy as np
+
+from .autograd import engine
+from .atuograd.function import Function
+from .autograd.numpy import wrapper as anp
 from .utils import topo_sort
 
 
@@ -10,12 +13,19 @@ class Tensor(object):
     """
 
     def __init__(self, value):
+        if isinstance(value, list):
+            value = np.asarray(value)
+        while isinstance(value, self.__class__):
+            value = value.get_value()
+
         self._value = value  # 节点保存的真实值
-        self._autograd_meta: AutogradMeta = None # 保存与梯度相关的信息
+        self._autograd_meta: AutogradMeta = None  # 保存与梯度相关的信息
         self._is_variable: bool = False  # 是否为可导的节点
 
     # ==============  重载，使得Tensor和np.narray有相似的接口 ================
-    def __getitem__(A, idx): return A[idx]
+    def __getitem__(self, idx):
+        # return self._value[idx]
+        return engine.get_item(self, idx)
 
     # Constants w.r.t float data just pass though
     shape = property(lambda self: self._value.shape)
@@ -51,9 +61,19 @@ class Tensor(object):
     def __le__(self, other): return anp.less_equal(self, other)
     def __abs__(self): return anp.abs(self)
     def __hash__(self): return id(self)
+    def __str__(self): return self.__repr__()
+    def __repr__(self): 
+        repr_text = self._value.__repr__().replace("array", "Tensor")
+        func_name = ""
+        if self.is_variable and self._autograd_meta and self._autograd_meta.get_function():
+            func_name = ", grad_fn=<{}>".format(
+                self._autograd_meta.get_function().__class__.__name__
+            )
+
+        return repr_text[:-1] + func_name + repr_text[-1:]
 
     # ============== attributes access functions =================
-    def set_autograd_meta(self, meta: AutogradMeta):
+    def set_autograd_meta(self, meta):
         self._autograd_meta = meta
 
     def get_grad(self):
@@ -70,19 +90,37 @@ class Tensor(object):
 
     def set_to_variable(self):
         self._is_variable = True
+        self._autograd_meta = AutogradMeta()
+        self._autograd_meta.grad = anp.zeros_like(self._value)
 
     def disable_variable(self):
         self._is_variable = False
 
-    # ============= autograd related ====================
-    def backward(self, grad):
-        """ 反向传播的入口函数 """
-        for grad_tensor in topo_sort(self):
-            grad = grad if grad_tensor == self else grad_tensor.get_grad()
+    @property
+    def grad(self):
+        try:
+            return self._autograd_meta.grad.get_value()
+        except:
+            return self._autograd_meta.grad
 
-            grad_list = grad_tensor.get_function().backward(grad, self._value)
+    # ============= autograd related ====================
+    def backward(self, grad=None):
+        """ 反向传播的入口函数 """
+        if grad is None and self._value.shape == (1, 1):
+            grad = self.__class__(anp.ones((1, 1)))
+        else:
+            raise ValueError("Shape: {} of grad should be provided".format(self._value.shape))
+            
+        for grad_tensor in topo_sort(self):
+            grad = grad if grad else grad_tensor.get_grad()
+            while type(grad) == self.__class__:
+                grad = grad.get_value()
+
+            grad_list = grad_tensor.get_grad_fn().backward(grad, self._value)
             for tensor, _grad in grad_list:
                 tensor.add_grad(_grad)
+
+            grad = None
 
     def add_grad(self, grad):
         self._autograd_meta.grad += grad
@@ -91,7 +129,7 @@ class Tensor(object):
 class AutogradMeta(object):
     """ 与自动求导相关的信息 """
     def __init__(self):
-        self.function: Function = None  # 得到对应节点使用的操作
+        self.function: Function = Function()  # 得到对应节点使用的操作
         self.grad = None               # 节点保存的梯度
 
     def get_function(self):
@@ -99,4 +137,51 @@ class AutogradMeta(object):
 
     def set_function(self, function: Function):
         self.function = function
+
+
+engine.set_tensor_type(Tensor)
+engine.set_grad_meta(AutogradMeta)
+
+
+# Set ArrayBox.<method name> = autograd.numpy.<function_name>
+nondiff_methods = [
+    'all',
+    'any',
+    'argmax',
+    'argmin',
+    'argpartition',
+    'argsort',
+    'nonzero',
+    'searchsorted',
+    'round']
+
+diff_methods = [
+    'clip',
+    'compress',
+    'cumprod',
+    'cumsum',
+    'diagonal',
+    'max',
+    'mean',
+    'min',
+    'prod',
+    'ptp',
+    'ravel',
+    'repeat',
+    'reshape',
+    'squeeze',
+    'std',
+    'sum',
+    'swapaxes',
+    'take',
+    'trace',
+    'transpose',
+    'var']
+
+for method_name in nondiff_methods + diff_methods:
+    setattr(Tensor, method_name, anp.__dict__[method_name])
+
+# Flatten has no function, only a method.
+setattr(Tensor, 'flatten', anp.__dict__['ravel'])
+
 

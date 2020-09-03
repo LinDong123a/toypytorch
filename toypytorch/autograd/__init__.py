@@ -1,5 +1,6 @@
 import numpy as np
 
+from .numpy.wrapper import *
 from .tensor import Tensor
 
 

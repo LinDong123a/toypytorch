@@ -5,7 +5,7 @@ from typing import List, Tuple
 import numpy as np
 
 from . import function
-from .utils import subvals
+from ..utils import subvals
 # from .tensor import Tensor, AutogradMeta
 
 
@@ -103,12 +103,10 @@ def find_tensor_args(args):
     output = []
     argnum = 0
     for arg in args:
-        print(arg)
         if isinstance(arg, Tensor) and arg.is_variable():
             output.append((argnum, arg))
         argnum += 1
 
-    print("output")
     return output
 
 

@@ -91,6 +91,8 @@ def wrap_namespace(old, new):
             new[name] = notrace_primitive(obj)
         elif type(obj) in function_types:
             # Functions with gradients. We trace values.
+            if obj == _np.__getattr__:
+                continue
             new[name] = primitive(obj)
         elif type(obj) is type and obj in int_types:
             # Wrap int types with something identical except that calls to __new__

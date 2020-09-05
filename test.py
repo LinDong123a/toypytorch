@@ -1,19 +1,18 @@
 import toypytorch as ttorch
 
 
-a = ttorch.Tensor([[0.2, 0.1]])
-b = ttorch.Tensor([[0.5], [0.5]])
-
-a.set_to_variable()
-b.set_to_variable()
+a = ttorch.Tensor([[0.2, 0.1]], requires_grad=True)
+b = ttorch.Tensor([[0.5], [0.5]], requires_grad=True)
 
 c = ttorch.dot(a, b)
+print("c", c)
 d = ttorch.exp(c)
 
 print(d)
 
 d.backward()
 
+print(a.shape, b.shape, c.shape, d.shape)
 print(d.grad)
 print(c.grad)
 print(a.grad)

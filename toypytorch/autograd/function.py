@@ -1,7 +1,7 @@
 from typing import List, Tuple, Dict
-import numpy as anp
+import numpy as np
 
-from .utils import upper_first_letter
+from ..utils import upper_first_letter
 
 
 def get_func_class_name(func):
@@ -14,19 +14,19 @@ def unbroadcast(target, g, broadcast_idx=0):
     When computing gradients of a broadcasted value, this is the right thing to
     do when computing the total derivative and accounting for cloning.
     """
-    while anp.ndim(g) > anp.ndim(target):
-        g = anp.sum(g, axis=broadcast_idx)
-    for axis, size in enumerate(anp.shape(target)):
+    while np.ndim(g) > np.ndim(target):
+        g = np.sum(g, axis=broadcast_idx)
+    for axis, size in enumerate(np.shape(target)):
         if size == 1:
-            g = anp.sum(g, axis=axis, keepdims=True)
-    if anp.iscomplexobj(g) and not anp.iscomplex(target):
-        g = anp.real(g)
+            g = np.sum(g, axis=axis, keepdims=True)
+    if np.iscomplexobj(g) and not np.iscomplex(target):
+        g = np.real(g)
     return g
 
 
 def replace_zero(x, val):
     """Replace all zeros in 'x' with 'val'."""
-    return anp.where(x, x, val)
+    return np.where(x, x, val)
 
 
 class Function(object):
@@ -124,9 +124,9 @@ class True_divideFunction(Function):
 
 class PowerFunction(Function):
     VJP_ALL = [
-        lambda g, ans, x, y: unbroadcast(x, g * y * x ** anp.where(y, y - 1, 1.)),
+        lambda g, ans, x, y: unbroadcast(x, g * y * x ** np.where(y, y - 1, 1.)),
         lambda g, ans, x, y:
-            unbroadcast(y, g * anp.log(replace_zero(x, 1.)) * x ** y),
+            unbroadcast(y, g * np.log(replace_zero(x, 1.)) * x ** y),
     ]
 
 
@@ -150,39 +150,39 @@ class LogFunction(Function):
 
 class TanhFunction(Function):
     VJP_ALL = [
-        lambda g, ans, x: g / anp.cosh(x) ** 2
+        lambda g, ans, x: g / np.cosh(x) ** 2
     ]
 
 
 class SinhFunction(Function):
     VJP_ALL = [
-        lambda g, ans, x: g * anp.cosh(x)
+        lambda g, ans, x: g * np.cosh(x)
     ]
 
 
 class CoshFunction(Function):
     VJP_ALL = [
-        lambda g, ans, x: g * anp.sinh(x)
+        lambda g, ans, x: g * np.sinh(x)
     ]
 
 
 class WhereFunction(Function):
     VJP_ALL = [
-        lambda g, ans, c, x=None, y=None: anp.where(c, g, anp.zeros(g.shape)),
-        lambda g, ans, c, x=None, y=None: anp.where(c, anp.zeros(g.shape), g),
+        lambda g, ans, c, x=None, y=None: np.where(c, g, np.zeros(g.shape)),
+        lambda g, ans, c, x=None, y=None: np.where(c, np.zeros(g.shape), g),
     ]
 
 
 class ReshapeFunction(Function):
     VJP_ALL = [
         lambda g, ans, x, shape, order=None:
-            anp.reshape(g, anp.shape(x), order=order)
+            np.reshape(g, np.shape(x), order=order)
     ]
 
 
 # ----- select grads -----
 def vjp_select(self: Function, g, ans, idx_args):
-    out_grad = anp.zeros_like(self.tensor_dict[0])
+    out_grad = np.zeros_like(self.tensor_dict[0])
     out_grad[idx_args] = g
 
     return out_grad
@@ -198,33 +198,33 @@ class SelectFunction(Function):
 
 
 def _dot_vjp_0(g, ans, lhs, rhs):
-    if max(anp.ndim(lhs), anp.ndim(rhs)) > 2:
+    if max(np.ndim(lhs), np.ndim(rhs)) > 2:
         raise NotImplementedError("Current dot vjps only support ndim <= 2.")
 
-    if anp.ndim(lhs) == 0:
-        return anp.sum(rhs * g)
-    if anp.ndim(lhs) == 1 and anp.ndim(rhs) == 1:
+    if np.ndim(lhs) == 0:
+        return np.sum(rhs * g)
+    if np.ndim(lhs) == 1 and np.ndim(rhs) == 1:
         return g * rhs
-    if anp.ndim(lhs) == 2 and anp.ndim(rhs) == 1:
+    if np.ndim(lhs) == 2 and np.ndim(rhs) == 1:
         return g[:, None] * rhs
-    if anp.ndim(lhs) == 1 and anp.ndim(rhs) == 2:
-        return anp.dot(rhs, g)
-    return anp.dot(g, rhs.T)
+    if np.ndim(lhs) == 1 and np.ndim(rhs) == 2:
+        return np.dot(rhs, g)
+    return np.dot(g, rhs.T)
 
 
 def _dot_vjp_1(g, ans, lhs, rhs):
-    if max(anp.ndim(lhs), anp.ndim(rhs)) > 2:
+    if max(np.ndim(lhs), np.ndim(rhs)) > 2:
         raise NotImplementedError("Current dot vjps only support ndim <= 2.")
 
-    if anp.ndim(rhs) == 0:
-        return anp.sum(lhs * g)
-    if anp.ndim(lhs) == 1 and anp.ndim(rhs) == 1:
+    if np.ndim(rhs) == 0:
+        return np.sum(lhs * g)
+    if np.ndim(lhs) == 1 and np.ndim(rhs) == 1:
         return g * lhs
-    if anp.ndim(lhs) == 2 and anp.ndim(rhs) == 1:
-        return anp.dot(g, lhs)
-    if anp.ndim(lhs) == 1 and anp.ndim(rhs) == 2:
+    if np.ndim(lhs) == 2 and np.ndim(rhs) == 1:
+        return np.dot(g, lhs)
+    if np.ndim(lhs) == 1 and np.ndim(rhs) == 2:
         return lhs[:, None] * g
-    return anp.dot(lhs.T, g)
+    return np.dot(lhs.T, g)
 
 
 class DotFunction(Function):

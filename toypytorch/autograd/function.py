@@ -233,4 +233,52 @@ class DotFunction(Function):
     ]
 
 
+def matmul_adjoint_0(B, G, A_meta, B_ndim):
+    if np.ndim(G) == 0:  # A_ndim == B_ndim == 1
+        return unbroadcast(G * B, A_meta)
+    _, A_ndim, _, _ = A_meta
+    if A_ndim == 1:
+        G = np.expand_dims(G, np.ndim(G) - 1)
+    if B_ndim == 1:  # The result we need is an outer product
+        B = np.expand_dims(B, 0)
+        G = np.expand_dims(G, np.ndim(G))
+    else:  # We need to swap the last two axes of B
+        B = np.swapaxes(B, B_ndim - 2, B_ndim - 1)
+    result = np.matmul(G, B)
+    return unbroadcast(result, A_meta)
 
+
+def matmul_adjoint_1(A, G, A_ndim, B_meta):
+    if np.ndim(G) == 0:  # A_ndim == B_ndim == 1
+        return unbroadcast(G * A, B_meta)
+    _, B_ndim, _, _ = B_meta
+    B_is_vec = (B_ndim == 1)
+    if B_is_vec:
+        G = np.expand_dims(G, np.ndim(G))
+    if A_ndim == 1:  # The result we need is an outer product
+        A = np.expand_dims(A, 1)
+        G = np.expand_dims(G, np.ndim(G) - 1)
+    else:  # We need to swap the last two axes of A
+        A = np.swapaxes(A, A_ndim - 2, A_ndim - 1)
+    result = np.matmul(A, G)
+    if B_is_vec:
+        result = np.squeeze(result, np.ndim(G) - 1)
+    return unbroadcast(result, B_meta)
+
+
+def matmul_vjp_0(g, ans, A, B):
+    A_meta = np.metadata(A)
+    B_ndim = np.ndim(B)
+    return matmul_adjoint_0(B, g, A_meta, B_ndim)
+
+
+def matmul_vjp_1(g, ans, A, B):
+    A_ndim = np.ndim(A)
+    B_meta = np.metadata(B)
+    return matmul_adjoint_1(A, g, A_ndim, B_meta)
+
+
+class MatmulFunction(Function):
+    VJP_ALL = [
+        matmul_vjp_0, matmul_vjp_1 
+    ]

@@ -56,7 +56,15 @@ def primitive(f_raw):
 
             return result_tensor
         else:
-            print("raw", f_raw(*args, **kwargs))
+            args = list(args)
+            for idx, arg in enumerate(args):
+                if isinstance(arg, Tensor):
+                    args[idx] = arg.get_value()
+
+            for k, v in kwargs.items():
+                if isinstance(v, Tensor):
+                    kwargs[k] = v.get_value()
+
             return Tensor(f_raw(*args, **kwargs))
     return f_wrapped
 
@@ -103,7 +111,8 @@ def find_tensor_args(args):
     output = []
     argnum = 0
     for arg in args:
-        if isinstance(arg, Tensor) and arg.is_variable():
+        # if isinstance(arg, Tensor) and arg.is_variable():
+        if isinstance(arg, Tensor):
             output.append((argnum, arg))
         argnum += 1
 

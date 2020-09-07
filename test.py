@@ -1,5 +1,6 @@
 import toypytorch as ttorch
-
+import toypytorch.nn as nn
+from toypytorch import functional as F
 
 a = ttorch.Tensor([[0.2, 0.1]], requires_grad=True)
 b = ttorch.Tensor([[0.5], [0.5]], requires_grad=True)

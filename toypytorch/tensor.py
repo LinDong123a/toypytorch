@@ -69,12 +69,18 @@ class Tensor(object):
     def __hash__(self): return id(self)
     def __str__(self): return self.__repr__()
     def __repr__(self): 
-        repr_text = self._value.__repr__().replace("array", "Tensor")
+        if isinstance(self._value, np.ndarray):
+            repr_text = self._value.__repr__().replace("array", "Tensor")
+        else:
+            repr_text = "Tensor({})".format(self._value)
         func_name = ""
         if self.requires_grad and self._autograd_meta and self._autograd_meta.get_function():
-            func_name = ", grad_fn=<{}>".format(
-                self._autograd_meta.get_function().__class__.__name__
-            )
+            if type(self._autograd_meta.get_function()) == Function:
+                func_name = ", requires_grad=True"
+            else:
+                func_name = ", grad_fn=<{}>".format(
+                    self._autograd_meta.get_function().__class__.__name__
+                )
 
         return repr_text[:-1] + func_name + repr_text[-1:]
 
@@ -129,6 +135,12 @@ class Tensor(object):
     def add_grad(self, grad):
         self._autograd_meta.grad += grad
 
+    def zero_grad(self):
+        if self._autograd_meta is None:
+            return 
+
+        self._autograd_meta.zero_grad()
+
 
 class AutogradMeta(object):
     """ 与自动求导相关的信息 """
@@ -141,6 +153,12 @@ class AutogradMeta(object):
 
     def set_function(self, function: Function):
         self.function = function
+
+    def zero_grad(self):
+        if grad is None:
+            return
+
+        self.grad = np.zeros_like(self.grad)
 
 
 engine.set_tensor_type(Tensor)

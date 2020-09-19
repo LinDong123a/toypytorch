@@ -31,7 +31,7 @@ class Module(object):
                 raise TypeError("super().__init__() must be called before "
                                 "addding parameter")
             params[name] = value
-        elif isinstance(value, self.__class__):
+        elif isinstance(value, Module):
             modules = self.__dict__.get("_modules")
             if modules is None:
                 raise TypeError("super().__init__() must be called before "
